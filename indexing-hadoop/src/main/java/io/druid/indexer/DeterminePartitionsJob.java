@@ -121,13 +121,13 @@ public class DeterminePartitionsJob implements Jobby
       }
 
       if (!config.getPartitionsSpec().isAssumeGrouped()) {
-        final Job groupByJob = new Job(
+        final Job groupByJob = Job.getInstance(
             new Configuration(),
             String.format("%s-determine_partitions_groupby-%s", config.getDataSource(), config.getIntervals())
         );
 
         JobHelper.injectSystemProperties(groupByJob);
-        groupByJob.setInputFormatClass(TextInputFormat.class);
+        JobHelper.setInputFormat(groupByJob, config);
         groupByJob.setMapperClass(DeterminePartitionsGroupByMapper.class);
         groupByJob.setMapOutputKeyClass(BytesWritable.class);
         groupByJob.setMapOutputValueClass(NullWritable.class);
@@ -157,7 +157,7 @@ public class DeterminePartitionsJob implements Jobby
       /*
        * Read grouped data and determine appropriate partitions.
        */
-      final Job dimSelectionJob = new Job(
+      final Job dimSelectionJob = Job.getInstance(
           new Configuration(),
           String.format("%s-determine_partitions_dimselection-%s", config.getDataSource(), config.getIntervals())
       );
@@ -174,7 +174,7 @@ public class DeterminePartitionsJob implements Jobby
       } else {
         // Directly read the source data, since we assume it's already grouped.
         dimSelectionJob.setMapperClass(DeterminePartitionsDimSelectionAssumeGroupedMapper.class);
-        dimSelectionJob.setInputFormatClass(TextInputFormat.class);
+        JobHelper.setInputFormat(dimSelectionJob, config);
         config.addInputPaths(dimSelectionJob);
       }
 
@@ -260,7 +260,7 @@ public class DeterminePartitionsJob implements Jobby
     @Override
     protected void innerMap(
         InputRow inputRow,
-        Text text,
+        Writable value,
         Context context
     ) throws IOException, InterruptedException
     {
@@ -341,7 +341,7 @@ public class DeterminePartitionsJob implements Jobby
     @Override
     protected void innerMap(
         InputRow inputRow,
-        Text text,
+        Writable value,
         Context context
     ) throws IOException, InterruptedException
     {

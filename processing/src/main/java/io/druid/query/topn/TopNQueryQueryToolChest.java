@@ -263,7 +263,7 @@ public class TopNQueryQueryToolChest extends QueryToolChest<Result<TopNResultVal
                     );
                     // put non finalized aggregators for calculating dependent post Aggregators
                     // JVM is dumb about optimization
-                    for (int i = 0; i < aggFactoryNames.length; ++i) {
+                    for( int i = 0; i < aggFactoryNames.length; ++i){
                       final String name = aggFactoryNames[i];
                       values.put(name, input.getMetric(name));
                     }
@@ -389,7 +389,7 @@ public class TopNQueryQueryToolChest extends QueryToolChest<Result<TopNResultVal
             List<Map<String, Object>> retVal = Lists.newArrayListWithCapacity(results.size());
 
             Iterator<Object> inputIter = results.iterator();
-            DateTime timestamp = granularity.toDateTime(new DateTime(inputIter.next()).getMillis());
+            DateTime timestamp = granularity.toDateTime(((Number) inputIter.next()).longValue());
 
             while (inputIter.hasNext()) {
               List<Object> result = (List<Object>) inputIter.next();

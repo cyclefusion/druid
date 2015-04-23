@@ -187,7 +187,8 @@ public class GroupByQueryQueryToolChest extends QueryToolChest<Row, GroupByQuery
                   query.getAggregatorSpecs(),
                   // Don't do post aggs until the end of this method.
                   ImmutableList.<PostAggregator>of(),
-                  query.getHavingSpec(),
+                  // Don't do "having" clause until the end of this method.
+                  null,
                   query.getLimitSpec(),
                   query.getContext()
               ).withOverriddenContext(

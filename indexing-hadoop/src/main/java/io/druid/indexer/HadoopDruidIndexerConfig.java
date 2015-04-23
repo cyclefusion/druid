@@ -38,7 +38,7 @@ import com.metamx.common.guava.FunctionalIterable;
 import com.metamx.common.logger.Logger;
 import io.druid.common.utils.JodaUtils;
 import io.druid.data.input.InputRow;
-import io.druid.data.input.impl.StringInputRowParser;
+import io.druid.data.input.impl.InputRowParser;
 import io.druid.granularity.QueryGranularity;
 import io.druid.guice.GuiceInjectors;
 import io.druid.guice.JsonConfigProvider;
@@ -46,6 +46,7 @@ import io.druid.guice.annotations.Self;
 import io.druid.indexer.partitions.PartitionsSpec;
 import io.druid.indexer.path.PathSpec;
 import io.druid.initialization.Initialization;
+import io.druid.segment.IndexSpec;
 import io.druid.segment.indexing.granularity.GranularitySpec;
 import io.druid.server.DruidNode;
 import io.druid.timeline.DataSegment;
@@ -55,6 +56,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
 import org.joda.time.DateTime;
 import org.joda.time.Interval;
@@ -244,6 +246,10 @@ public class HadoopDruidIndexerConfig
     return schema.getTuningConfig().getPartitionsSpec();
   }
 
+  public IndexSpec getIndexSpec() {
+    return schema.getTuningConfig().getIndexSpec();
+  }
+
   public boolean isOverwriteFiles()
   {
     return schema.getTuningConfig().isOverwriteFiles();
@@ -301,9 +307,9 @@ public class HadoopDruidIndexerConfig
     return schema.getTuningConfig().isCombineText();
   }
 
-  public StringInputRowParser getParser()
+  public InputRowParser getParser()
   {
-    return (StringInputRowParser) schema.getDataSchema().getParser();
+    return schema.getDataSchema().getParser();
   }
 
   public HadoopyShardSpec getShardSpec(Bucket bucket)
@@ -314,6 +320,11 @@ public class HadoopDruidIndexerConfig
   public Job addInputPaths(Job job) throws IOException
   {
     return pathSpec.addInputPaths(this, job);
+  }
+
+  public Class<? extends InputFormat> getInputFormatClass()
+  {
+    return pathSpec.getInputFormat();
   }
 
   /********************************************

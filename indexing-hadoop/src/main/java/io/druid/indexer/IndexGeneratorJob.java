@@ -34,15 +34,16 @@ import com.metamx.common.IAE;
 import com.metamx.common.ISE;
 import com.metamx.common.guava.CloseQuietly;
 import com.metamx.common.logger.Logger;
+import com.metamx.common.parsers.ParseException;
 import io.druid.collections.StupidPool;
 import io.druid.data.input.InputRow;
 import io.druid.data.input.Rows;
-import io.druid.data.input.impl.StringInputRowParser;
-import io.druid.granularity.QueryGranularity;
+import io.druid.data.input.impl.InputRowParser;
 import io.druid.offheap.OffheapBufferPool;
 import io.druid.query.aggregation.AggregatorFactory;
 import io.druid.segment.IndexIO;
 import io.druid.segment.IndexMaker;
+import io.druid.segment.IndexSpec;
 import io.druid.segment.LoggingProgressIndicator;
 import io.druid.segment.ProgressIndicator;
 import io.druid.segment.QueryableIndex;
@@ -61,14 +62,13 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.InvalidJobConfException;
 import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
-import org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.joda.time.DateTime;
@@ -149,7 +149,7 @@ public class IndexGeneratorJob implements Jobby
   public boolean run()
   {
     try {
-      Job job = new Job(
+      Job job = Job.getInstance(
           new Configuration(),
           String.format("%s-index-generator-%s", config.getDataSource(), config.getIntervals())
       );
@@ -158,11 +158,7 @@ public class IndexGeneratorJob implements Jobby
 
       JobHelper.injectSystemProperties(job);
 
-      if (config.isCombineText()) {
-        job.setInputFormatClass(CombineTextInputFormat.class);
-      } else {
-        job.setInputFormatClass(TextInputFormat.class);
-      }
+      JobHelper.setInputFormat(job, config);
 
       job.setMapperClass(IndexGeneratorMapper.class);
       job.setMapOutputValueClass(Text.class);
@@ -217,14 +213,14 @@ public class IndexGeneratorJob implements Jobby
     }
   }
 
-  public static class IndexGeneratorMapper extends HadoopDruidIndexerMapper<BytesWritable, Text>
+  public static class IndexGeneratorMapper extends HadoopDruidIndexerMapper<BytesWritable, Writable>
   {
     private static final HashFunction hashFunction = Hashing.murmur3_128();
 
     @Override
     protected void innerMap(
         InputRow inputRow,
-        Text text,
+        Writable value,
         Context context
     ) throws IOException, InterruptedException
     {
@@ -254,17 +250,17 @@ public class IndexGeneratorJob implements Jobby
                         .put(hashedDimensions)
                         .array()
           ).toBytesWritable(),
-          text
+          value
       );
     }
   }
 
-  public static class IndexGeneratorPartitioner extends Partitioner<BytesWritable, Text> implements Configurable
+  public static class IndexGeneratorPartitioner extends Partitioner<BytesWritable, Writable> implements Configurable
   {
     private Configuration config;
 
     @Override
-    public int getPartition(BytesWritable bytesWritable, Text text, int numPartitions)
+    public int getPartition(BytesWritable bytesWritable, Writable value, int numPartitions)
     {
       final ByteBuffer bytes = ByteBuffer.wrap(bytesWritable.getBytes());
       bytes.position(4); // Skip length added by SortableBytes
@@ -293,11 +289,11 @@ public class IndexGeneratorJob implements Jobby
     }
   }
 
-  public static class IndexGeneratorReducer extends Reducer<BytesWritable, Text, BytesWritable, Text>
+  public static class IndexGeneratorReducer extends Reducer<BytesWritable, Writable, BytesWritable, Text>
   {
-    private HadoopDruidIndexerConfig config;
+    protected HadoopDruidIndexerConfig config;
     private List<String> metricNames = Lists.newArrayList();
-    private StringInputRowParser parser;
+    private InputRowParser parser;
 
     protected ProgressIndicator makeProgressIndicator(final Context context)
     {
@@ -319,7 +315,7 @@ public class IndexGeneratorJob implements Jobby
     ) throws IOException
     {
       return IndexMaker.persist(
-          index, interval, file, progressIndicator
+          index, interval, file, config.getIndexSpec(), progressIndicator
       );
     }
 
@@ -331,7 +327,7 @@ public class IndexGeneratorJob implements Jobby
     ) throws IOException
     {
       return IndexMaker.mergeQueryableIndex(
-          indexes, aggs, file, progressIndicator
+          indexes, aggs, file, config.getIndexSpec(), progressIndicator
       );
     }
 
@@ -350,7 +346,7 @@ public class IndexGeneratorJob implements Jobby
 
     @Override
     protected void reduce(
-        BytesWritable key, Iterable<Text> values, final Context context
+        BytesWritable key, Iterable<Writable> values, final Context context
     ) throws IOException, InterruptedException
     {
       SortableBytes keyBytes = SortableBytes.fromBytesWritable(key);
@@ -378,12 +374,23 @@ public class IndexGeneratorJob implements Jobby
         Set<String> allDimensionNames = Sets.newHashSet();
         final ProgressIndicator progressIndicator = makeProgressIndicator(context);
 
-        for (final Text value : values) {
+        for (final Writable value : values) {
           context.progress();
-          final InputRow inputRow = index.formatRow(parser.parse(value.toString()));
-          allDimensionNames.addAll(inputRow.getDimensions());
+          int numRows;
+          try {
+            final InputRow inputRow = index.formatRow(HadoopDruidIndexerMapper.parseInputRow(value, parser));
+            allDimensionNames.addAll(inputRow.getDimensions());
 
-          int numRows = index.add(inputRow);
+            numRows = index.add(inputRow);
+          } catch (ParseException e) {
+            if (config.isIgnoreInvalidRows()) {
+              log.debug(e, "Ignoring invalid row [%s] due to parsing error", value.toString());
+              context.getCounter(HadoopDruidIndexerConfig.IndexJobCounters.INVALID_ROW_COUNTER).increment(1);
+              continue;
+            } else {
+              throw e;
+            }
+          }
           ++lineCount;
 
           if (!index.canAppendRow()) {

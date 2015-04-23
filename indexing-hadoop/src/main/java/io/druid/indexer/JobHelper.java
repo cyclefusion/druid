@@ -30,6 +30,8 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.CombineTextInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,7 +75,7 @@ public class JobHelper
         final Path hdfsPath = new Path(distributedClassPath, jarFile.getName());
 
         if (!existing.contains(hdfsPath)) {
-          if (jarFile.getName().endsWith("SNAPSHOT.jar") || !fs.exists(hdfsPath)) {
+          if (jarFile.getName().matches(".*SNAPSHOT(-selfcontained)?\\.jar$") || !fs.exists(hdfsPath)) {
             log.info("Uploading jar to path[%s]", hdfsPath);
             ByteStreams.copy(
                 Files.newInputStreamSupplier(jarFile),
@@ -110,7 +112,7 @@ public class JobHelper
   {
     // config.addInputPaths() can have side-effects ( boo! :( ), so this stuff needs to be done before anything else
     try {
-      Job job = new Job(
+      Job job = Job.getInstance(
           new Configuration(),
           String.format("%s-determine_partitions-%s", config.getDataSource(), config.getIntervals())
       );
@@ -154,5 +156,16 @@ public class JobHelper
     }
 
     return true;
+  }
+
+  public static void setInputFormat(Job job, HadoopDruidIndexerConfig indexerConfig)
+  {
+    if(indexerConfig.getInputFormatClass() != null) {
+      job.setInputFormatClass(indexerConfig.getInputFormatClass());
+    } else if (indexerConfig.isCombineText()) {
+      job.setInputFormatClass(CombineTextInputFormat.class);
+    } else {
+      job.setInputFormatClass(TextInputFormat.class);
+    }
   }
 }

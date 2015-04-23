@@ -55,6 +55,7 @@ import io.druid.query.spec.SpecificSegmentSpec;
 import io.druid.segment.IndexIO;
 import io.druid.segment.IndexMaker;
 import io.druid.segment.IndexMerger;
+import io.druid.segment.IndexSpec;
 import io.druid.segment.QueryableIndex;
 import io.druid.segment.QueryableIndexSegment;
 import io.druid.segment.Segment;
@@ -267,6 +268,7 @@ public class RealtimePlumber implements Plumber
                           throw new ISE("No timeline entry at all!");
                         }
 
+                        // The realtime plumber always uses SingleElementPartitionChunk
                         final Sink theSink = holder.getObject().getChunk(0).getObject();
 
                         if (theSink == null) {
@@ -437,13 +439,15 @@ public class RealtimePlumber implements Plumber
                 mergedFile = IndexMaker.mergeQueryableIndex(
                     indexes,
                     schema.getAggregators(),
-                    mergedTarget
+                    mergedTarget,
+                    config.getIndexSpec()
                 );
               } else {
                 mergedFile = IndexMerger.mergeQueryableIndex(
                     indexes,
                     schema.getAggregators(),
-                    mergedTarget
+                    mergedTarget,
+                    config.getIndexSpec()
                 );
               }
 
@@ -832,15 +836,18 @@ public class RealtimePlumber implements Plumber
         int numRows = indexToPersist.getIndex().size();
 
         final File persistedFile;
+        final IndexSpec indexSpec = config.getIndexSpec();
         if (config.isPersistInHeap()) {
           persistedFile = IndexMaker.persist(
               indexToPersist.getIndex(),
-              new File(computePersistDir(schema, interval), String.valueOf(indexToPersist.getCount()))
+              new File(computePersistDir(schema, interval), String.valueOf(indexToPersist.getCount())),
+              indexSpec
           );
         } else {
           persistedFile = IndexMerger.persist(
               indexToPersist.getIndex(),
-              new File(computePersistDir(schema, interval), String.valueOf(indexToPersist.getCount()))
+              new File(computePersistDir(schema, interval), String.valueOf(indexToPersist.getCount())),
+              indexSpec
           );
         }
 

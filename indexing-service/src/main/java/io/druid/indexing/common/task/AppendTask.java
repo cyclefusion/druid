@@ -22,10 +22,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import io.druid.segment.IndexIO;
 import io.druid.segment.IndexMerger;
+import io.druid.segment.IndexSpec;
 import io.druid.segment.IndexableAdapter;
 import io.druid.segment.QueryableIndexIndexableAdapter;
 import io.druid.segment.Rowboat;
@@ -33,8 +35,10 @@ import io.druid.segment.RowboatFilteringIndexAdapter;
 import io.druid.timeline.DataSegment;
 import io.druid.timeline.TimelineObjectHolder;
 import io.druid.timeline.VersionedIntervalTimeline;
+import io.druid.timeline.partition.PartitionChunk;
 import org.joda.time.Interval;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
@@ -43,14 +47,19 @@ import java.util.Map;
  */
 public class AppendTask extends MergeTaskBase
 {
+
+  private final IndexSpec indexSpec;
+
   @JsonCreator
   public AppendTask(
       @JsonProperty("id") String id,
       @JsonProperty("dataSource") String dataSource,
-      @JsonProperty("segments") List<DataSegment> segments
+      @JsonProperty("segments") List<DataSegment> segments,
+      @JsonProperty("indexSpec") IndexSpec indexSpec
   )
   {
     super(id, dataSource, segments);
+    this.indexSpec = indexSpec == null ? new IndexSpec() : indexSpec;
   }
 
   @Override
@@ -65,22 +74,36 @@ public class AppendTask extends MergeTaskBase
       timeline.add(segment.getInterval(), segment.getVersion(), segment.getShardSpec().createChunk(segment));
     }
 
-    final List<SegmentToMergeHolder> segmentsToMerge = Lists.transform(
-        timeline.lookup(new Interval("1000-01-01/3000-01-01")),
-        new Function<TimelineObjectHolder<String, DataSegment>, SegmentToMergeHolder>()
-        {
-          @Override
-          public SegmentToMergeHolder apply(TimelineObjectHolder<String, DataSegment> input)
-          {
-            final DataSegment segment = input.getObject().getChunk(0).getObject();
-            final File file = Preconditions.checkNotNull(
-                segments.get(segment),
-                "File for segment %s", segment.getIdentifier()
-            );
-
-            return new SegmentToMergeHolder(segment, input.getInterval(), file);
-          }
-        }
+    final Iterable<SegmentToMergeHolder> segmentsToMerge = Iterables.concat(
+        Iterables.transform(
+            timeline.lookup(new Interval("1000-01-01/3000-01-01")),
+            new Function<TimelineObjectHolder<String, DataSegment>, Iterable<SegmentToMergeHolder>>()
+            {
+              @Override
+              public Iterable<SegmentToMergeHolder> apply(final TimelineObjectHolder<String, DataSegment> input)
+              {
+                return Iterables.transform(
+                    input.getObject(),
+                    new Function<PartitionChunk<DataSegment>, SegmentToMergeHolder>()
+                    {
+                      @Nullable
+                      @Override
+                      public SegmentToMergeHolder apply(PartitionChunk<DataSegment> chunkInput)
+                      {
+                        DataSegment segment = chunkInput.getObject();
+                        return new SegmentToMergeHolder(
+                            segment, input.getInterval(),
+                            Preconditions.checkNotNull(
+                                segments.get(segment),
+                                "File for segment %s", segment.getIdentifier()
+                            )
+                        );
+                      }
+                    }
+                );
+              }
+            }
+        )
     );
 
     List<IndexableAdapter> adapters = Lists.newArrayList();
@@ -103,7 +126,7 @@ public class AppendTask extends MergeTaskBase
       );
     }
 
-    return IndexMerger.append(adapters, outDir);
+    return IndexMerger.append(adapters, outDir, indexSpec);
   }
 
   @Override
