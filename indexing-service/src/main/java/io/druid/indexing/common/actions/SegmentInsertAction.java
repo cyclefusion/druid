@@ -89,7 +89,7 @@ public class SegmentInsertAction implements TaskAction<Set<DataSegment>>
 
     for (DataSegment segment : segments) {
       metricBuilder.setDimension(DruidMetrics.INTERVAL, segment.getInterval().toString());
-      toolbox.getEmitter().emit(metricBuilder.build("segment/bytes", segment.getSize()));
+      toolbox.getEmitter().emit(metricBuilder.build("segment/added/bytes", segment.getSize()));
     }
 
     return retVal;

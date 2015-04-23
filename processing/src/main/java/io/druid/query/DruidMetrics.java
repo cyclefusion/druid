@@ -56,7 +56,6 @@ public class DruidMetrics
     return retVal;
   }
 
-
   public static <T> ServiceMetricEvent.Builder makePartialQueryTimeMetric(Query<T> query)
   {
     return new ServiceMetricEvent.Builder()
@@ -93,7 +92,7 @@ public class DruidMetrics
                 : query.getContext()
             )
         )
-        .setDimension("remoteAddr", remoteAddr)
+        .setDimension("remoteAddress", remoteAddr)
         .setDimension(ID, query.getId());
   }
 }

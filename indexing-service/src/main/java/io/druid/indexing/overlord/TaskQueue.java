@@ -466,7 +466,7 @@ public class TaskQueue
               // Emit event and log, if the task is done
               if (status.isComplete()) {
                 metricBuilder.setDimension(DruidMetrics.TASK_STATUS, status.getStatusCode().toString());
-                emitter.emit(metricBuilder.build("indexer/time/run/millis", status.getDuration()));
+                emitter.emit(metricBuilder.build("task/run/time", status.getDuration()));
 
                 log.info(
                     "Task %s: %s (%d run duration)",

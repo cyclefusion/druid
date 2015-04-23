@@ -79,6 +79,11 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
       }
     }
 
+    emitTieredStats(
+        emitter, "segment/%s/assigned/count",
+        assigned
+    );
+
     Map<String, AtomicLong> dropped = stats.getPerTierStats().get("droppedCount");
     if (dropped != null) {
       for (Map.Entry<String, AtomicLong> entry : dropped.entrySet()) {
@@ -88,6 +93,11 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
         );
       }
     }
+
+    emitTieredStats(
+        emitter, "segment/%s/dropped/count",
+        dropped
+    );
 
     emitTieredStats(
         emitter, "segment/%s/cost/raw",
