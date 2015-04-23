@@ -178,7 +178,7 @@ These metrics are only available if the SysMonitor module is included.
 |`sys/disk/read/size`|Bytes read from disk. Can we used to determine how much paging is occuring with regards to segments.|Varies.|
 |`sys/net/write/size`|Bytes written to the network.|Varies.|
 |`sys/net/read/size`|Bytes read from the network.|Varies.|
-|`sys/fs/used`|Filesystem bytes used.|close to max pool|
+|`sys/fs/used`|Filesystem bytes used.|< max|
 |`sys/fs/max`|Filesystesm bytes max.|Varies.|
-|`sys/mem/used`|Memory used.|close to max pool|
+|`sys/mem/used`|Memory used.|< max|
 |`sys/mem/max`|Memory max.|Varies.|
