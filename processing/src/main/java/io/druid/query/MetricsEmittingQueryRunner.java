@@ -18,6 +18,8 @@
 package io.druid.query;
 
 import com.google.common.base.Function;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.metamx.common.guava.Accumulator;
 import com.metamx.common.guava.Sequence;
 import com.metamx.common.guava.Yielder;
@@ -26,6 +28,7 @@ import com.metamx.emitter.service.ServiceEmitter;
 import com.metamx.emitter.service.ServiceMetricEvent;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -39,6 +42,7 @@ public class MetricsEmittingQueryRunner<T> implements QueryRunner<T>
   private final QueryRunner<T> queryRunner;
   private final long creationTime;
   private final String metricName;
+  private final Map<String, String> userDimensions;
 
   public MetricsEmittingQueryRunner(
       ServiceEmitter emitter,
@@ -46,7 +50,7 @@ public class MetricsEmittingQueryRunner<T> implements QueryRunner<T>
       QueryRunner<T> queryRunner
   )
   {
-    this(emitter, builderFn, queryRunner, DEFAULT_METRIC_NAME);
+    this(emitter, builderFn, queryRunner, DEFAULT_METRIC_NAME, Maps.<String, String>newHashMap());
   }
 
   public MetricsEmittingQueryRunner(
@@ -54,7 +58,8 @@ public class MetricsEmittingQueryRunner<T> implements QueryRunner<T>
       Function<Query<T>, ServiceMetricEvent.Builder> builderFn,
       QueryRunner<T> queryRunner,
       long creationTime,
-      String metricName
+      String metricName,
+      Map<String, String> userDimensions
   )
   {
     this.emitter = emitter;
@@ -62,28 +67,42 @@ public class MetricsEmittingQueryRunner<T> implements QueryRunner<T>
     this.queryRunner = queryRunner;
     this.creationTime = creationTime;
     this.metricName = metricName;
+    this.userDimensions = userDimensions;
   }
 
   public MetricsEmittingQueryRunner(
       ServiceEmitter emitter,
       Function<Query<T>, ServiceMetricEvent.Builder> builderFn,
       QueryRunner<T> queryRunner,
-      String metricName
+      String metricName,
+      Map<String, String> userDimensions
   )
   {
-    this(emitter, builderFn, queryRunner, -1, metricName);
+    this(emitter, builderFn, queryRunner, -1, metricName, userDimensions);
   }
 
 
   public MetricsEmittingQueryRunner<T> withWaitMeasuredFromNow()
   {
-    return new MetricsEmittingQueryRunner<T>(emitter, builderFn, queryRunner, System.currentTimeMillis(), metricName);
+    return new MetricsEmittingQueryRunner<T>(
+        emitter,
+        builderFn,
+        queryRunner,
+        System.currentTimeMillis(),
+        metricName,
+        userDimensions
+    );
   }
 
   @Override
   public Sequence<T> run(final Query<T> query, final Map<String, Object> responseContext)
   {
     final ServiceMetricEvent.Builder builder = builderFn.apply(query);
+
+    for (Map.Entry<String, String> userDimension : userDimensions.entrySet()) {
+      builder.setDimension(userDimension.getKey(), userDimension.getValue());
+    }
+
     String queryId = query.getId();
     if (queryId == null) {
       queryId = "";

@@ -45,7 +45,7 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
 
   private <T extends Number> void emitTieredStats(
       final ServiceEmitter emitter,
-      final String formatString,
+      final String metricName,
       final Map<String, T> statMap
   )
   {
@@ -54,9 +54,11 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
         String tier = entry.getKey();
         Number value = entry.getValue();
         emitter.emit(
-            new ServiceMetricEvent.Builder().build(
-                String.format(formatString, tier), value.doubleValue()
-            )
+            new ServiceMetricEvent.Builder()
+                .setDimension("tier", tier)
+                .build(
+                    metricName, value.doubleValue()
+                )
         );
       }
     }
@@ -80,7 +82,7 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
     }
 
     emitTieredStats(
-        emitter, "segment/%s/assigned/count",
+        emitter, "segment/assigned/count",
         assigned
     );
 
@@ -95,34 +97,34 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
     }
 
     emitTieredStats(
-        emitter, "segment/%s/dropped/count",
+        emitter, "segment/dropped/count",
         dropped
     );
 
     emitTieredStats(
-        emitter, "segment/%s/cost/raw",
+        emitter, "segment/cost/raw",
         stats.getPerTierStats().get("initialCost")
     );
 
     emitTieredStats(
-        emitter, "segment/%s/cost/normalization",
+        emitter, "segment/cost/normalization",
         stats.getPerTierStats().get("normalization")
     );
 
     emitTieredStats(
-        emitter, "segment/%s/moved/count",
+        emitter, "segment/moved/count",
         stats.getPerTierStats().get("movedCount")
     );
 
     emitTieredStats(
-        emitter, "segment/%s/deleted/count",
+        emitter, "segment/deleted/count",
         stats.getPerTierStats().get("deletedCount")
     );
 
     Map<String, AtomicLong> normalized = stats.getPerTierStats().get("normalizedInitialCostTimesOneThousand");
     if (normalized != null) {
       emitTieredStats(
-          emitter, "segment/%s/cost/normalized",
+          emitter, "segment/cost/normalized",
           Maps.transformEntries(
               normalized,
               new Maps.EntryTransformer<String, AtomicLong, Number>()
@@ -146,6 +148,11 @@ public class DruidCoordinatorLogger implements DruidCoordinatorHelper
         );
       }
     }
+
+    emitTieredStats(
+        emitter, "segment/unneeded/count",
+        stats.getPerTierStats().get("unneededCount")
+    );
 
     emitter.emit(
         new ServiceMetricEvent.Builder().build(

@@ -155,21 +155,19 @@ public class TopNQueryQueryToolChest extends QueryToolChest<Result<TopNResultVal
   public ServiceMetricEvent.Builder makeMetricBuilder(TopNQuery query)
   {
     return DruidMetrics.makePartialQueryTimeMetric(query)
-                          .setDimension(
-                              "type", String.format(
-                                  "topN/%s/%s",
-                                  query.getThreshold(),
-                                  query.getDimensionSpec().getDimension()
-                              )
-                          )
-                          .setDimension(
-                              "numMetrics",
-                              String.valueOf(query.getAggregatorSpecs().size())
-                          )
-                          .setDimension(
-                              "numComplexMetrics",
-                              String.valueOf(DruidMetrics.findNumComplexAggs(query.getAggregatorSpecs()))
-                          );
+                       .setDimension(
+                           "threshold",
+                           String.valueOf(query.getThreshold())
+                       )
+                       .setDimension("dimension", query.getDimensionSpec().getDimension())
+                       .setDimension(
+                           "numMetrics",
+                           String.valueOf(query.getAggregatorSpecs().size())
+                       )
+                       .setDimension(
+                           "numComplexMetrics",
+                           String.valueOf(DruidMetrics.findNumComplexAggs(query.getAggregatorSpecs()))
+                       );
   }
 
   @Override
@@ -201,7 +199,7 @@ public class TopNQueryQueryToolChest extends QueryToolChest<Result<TopNResultVal
                         + prunedAggs.size()
                         + 1
                     );
-                    
+
                     for (int i = 0; i < aggregatorFactories.length; ++i) {
                       final String aggName = aggFactoryNames[i];
                       values.put(aggName, fn.manipulate(aggregatorFactories[i], input.getMetric(aggName)));
@@ -262,7 +260,7 @@ public class TopNQueryQueryToolChest extends QueryToolChest<Result<TopNResultVal
                         + 1
                     );
 
-                    for( int i = 0; i < aggFactoryNames.length; ++i){
+                    for (int i = 0; i < aggFactoryNames.length; ++i) {
                       final String name = aggFactoryNames[i];
                       values.put(name, input.getMetric(name));
                     }

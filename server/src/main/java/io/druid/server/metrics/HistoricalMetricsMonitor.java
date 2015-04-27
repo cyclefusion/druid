@@ -46,13 +46,10 @@ public class HistoricalMetricsMonitor extends AbstractMonitor
   public boolean doMonitor(ServiceEmitter emitter)
   {
     emitter.emit(new ServiceMetricEvent.Builder().build("segment/max", serverConfig.getMaxSize()));
-    long totalUsed = 0;
-    long totalCount = 0;
 
     for (Map.Entry<String, Long> entry : serverManager.getDataSourceSizes().entrySet()) {
       String dataSource = entry.getKey();
       long used = entry.getValue();
-      totalUsed += used;
 
       final ServiceMetricEvent.Builder builder =
           new ServiceMetricEvent.Builder().setDimension(DruidMetrics.DATASOURCE, dataSource)
@@ -68,7 +65,6 @@ public class HistoricalMetricsMonitor extends AbstractMonitor
     for (Map.Entry<String, Long> entry : serverManager.getDataSourceCounts().entrySet()) {
       String dataSource = entry.getKey();
       long count = entry.getValue();
-      totalCount += count;
       final ServiceMetricEvent.Builder builder =
           new ServiceMetricEvent.Builder().setDimension(DruidMetrics.DATASOURCE, dataSource)
                                           .setDimension("tier", serverConfig.getTier())
@@ -79,17 +75,6 @@ public class HistoricalMetricsMonitor extends AbstractMonitor
 
       emitter.emit(builder.build("segment/count", count));
     }
-
-    final ServiceMetricEvent.Builder builder =
-        new ServiceMetricEvent.Builder().setDimension("tier", serverConfig.getTier())
-                                        .setDimension(
-                                            "priority",
-                                            String.valueOf(serverConfig.getPriority())
-                                        );
-    emitter.emit(builder.build("segment/totalUsed", totalUsed));
-    final double totalUsedPercent = serverConfig.getMaxSize() == 0 ? 0 : totalUsed / (double) serverConfig.getMaxSize();
-    emitter.emit(builder.build("segment/totalUsedPercent", totalUsedPercent));
-    emitter.emit(builder.build("segment/totalCount", totalCount));
 
     return true;
   }
